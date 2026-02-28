@@ -1,4 +1,4 @@
-# Design Document: KavalAI - On-Device AI Safety Layer
+# Design Document: KavalAI 
 
 ## Overview
 

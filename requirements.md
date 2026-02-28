@@ -1,4 +1,4 @@
-# Requirements Document: KavalAI - On-Device AI Safety Layer
+# Requirements Document: KavalAI 
 
 ## Introduction
 
