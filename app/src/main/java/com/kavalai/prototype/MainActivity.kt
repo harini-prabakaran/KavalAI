@@ -87,6 +87,19 @@ object ScamEngine {
                 "Advance Fee Fraud"
             else -> "Social Engineering Attempt"
         }
+        val explanation = when (pattern) {
+            "Bank KYC Phishing" ->
+                "This message attempts to impersonate a bank and pressures the user to verify sensitive details."
+
+            "Fake Logistics Scam" ->
+                "This message uses delivery failure and a shortened link, a common phishing method."
+
+            "Advance Fee Fraud" ->
+                "This message promises rewards but requests money upfront."
+
+            else ->
+                "This message shows behavioral patterns consistent with social engineering."
+        }
 
         return AnalysisResult(
             score = minOf(score, 100),
@@ -96,7 +109,8 @@ object ScamEngine {
                 else -> "LOW RISK"
             },
             reasons = reasons,
-            pattern = pattern
+            pattern = pattern,
+            explanation = explanation
         )
     }
 }
@@ -105,7 +119,8 @@ data class AnalysisResult(
     val score: Int,
     val level: String,
     val reasons: List<Pair<String, Float>>,
-    val pattern: String
+    val pattern: String,
+    val explanation: String
 )
 
 // =====================
@@ -172,9 +187,8 @@ fun MessageScreen(result: AnalysisResult, originalMessage: String) {
     }
 
     LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(24.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
 
@@ -229,6 +243,13 @@ fun MessageScreen(result: AnalysisResult, originalMessage: String) {
                 color = riskColor
             )
         }
+        item {
+            InfoCard(
+                title = "Why this matters",
+                content = result.explanation,
+                color = riskColor
+            )
+        }
 
         item {
             Card(
@@ -253,6 +274,7 @@ fun MessageScreen(result: AnalysisResult, originalMessage: String) {
                 }
             }
         }
+
 
         item {
             Text(
