@@ -2,115 +2,98 @@ package com.kavalai.prototype
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kavalai.prototype.ui.theme.KavalAiTheme
 
-// =====================
-// 🧠 SCAM ENGINE
-// =====================
+// ---------------------------
+// Screen State
+// ---------------------------
+
+sealed class AppScreen {
+    object Chat : AppScreen()
+    object Analysis : AppScreen()
+}
+
+// ---------------------------
+// Scam Engine
+// ---------------------------
 
 object ScamEngine {
-    private val regexLogistics =
-        Regex("(?i)(delivery|package|courier|shipment|reschedule)")
-
-    private val regexUrgency =
-        Regex("(?i)u[.\\s-]*r[.\\s-]*g[.\\s-]*e[.\\s-]*n[.\\s-]*t|immediately|action required")
 
     private val regexLink =
-        Regex("(?i)(https?://|bit\\.ly|t\\.co|tinyurl|click\\.here)")
+        Regex("(?i)(https?://|bit\\.ly|tinyurl|t\\.co)")
+
+    private val regexUrgent =
+        Regex("(?i)(urgent|immediately|action required)")
 
     private val regexMoney =
-        Regex("(?i)(\\$|rs|dollars|amount|payment|transfer|win|won|prize)")
+        Regex("(?i)(payment|transfer|prize|win|bank|kyc)")
 
-    fun analyzeMessage(message: String): AnalysisResult {
+    fun analyze(message: String): AnalysisResult {
 
-        val reasons = mutableListOf<Pair<String, Float>>()
         var score = 0
+        val reasons = mutableListOf<Pair<String, Float>>()
 
         val hasLink = regexLink.containsMatchIn(message)
-        val hasUrgency = regexUrgency.containsMatchIn(message)
+        val hasUrgent = regexUrgent.containsMatchIn(message)
         val hasMoney = regexMoney.containsMatchIn(message)
-        val hasLogistics = regexLogistics.containsMatchIn(message)
-
-        if (hasLogistics && hasLink) {
-            score += 25
-            reasons.add("Fake Delivery Phishing Pattern" to 0.25f)
-        }
 
         if (hasLink) {
             score += 35
             reasons.add("Suspicious Link Detected" to 0.35f)
         }
 
-        if (hasUrgency) {
+        if (hasUrgent) {
             score += 25
-            reasons.add("Artificial Urgency Language" to 0.25f)
+            reasons.add("Urgency Language Used" to 0.25f)
         }
 
         if (hasMoney) {
-            score += 20
-            reasons.add("Financial/Payment Trigger" to 0.20f)
+            score += 25
+            reasons.add("Financial Trigger Words" to 0.25f)
         }
 
-        if (hasLink && hasUrgency) {
-            score += 20
-            reasons.add("High‑Pressure Phishing Combo" to 0.20f)
+        if (hasLink && hasUrgent) {
+            score += 15
+            reasons.add("High‑Pressure Phishing Pattern" to 0.15f)
         }
 
-        val pattern = when {
-            message.contains("kyc", true) -> "Bank KYC Phishing"
-            message.contains("otp", true) -> "OTP Credential Theft"
-            message.contains("delivery", true) || message.contains("package", true) ->
-                "Fake Logistics Scam"
-            message.contains("lottery", true) || message.contains("prize", true) ->
-                "Advance Fee Fraud"
-            else -> "Social Engineering Attempt"
-        }
-        val explanation = when (pattern) {
-            "Bank KYC Phishing" ->
-                "This message attempts to impersonate a bank and pressures the user to verify sensitive details."
-
-            "Fake Logistics Scam" ->
-                "This message uses delivery failure and a shortened link, a common phishing method."
-
-            "Advance Fee Fraud" ->
-                "This message promises rewards but requests money upfront."
-
-            else ->
-                "This message shows behavioral patterns consistent with social engineering."
+        val level = when {
+            score >= 75 -> "CRITICAL"
+            score >= 45 -> "CAUTION"
+            else -> "LOW RISK"
         }
 
         return AnalysisResult(
-            score = minOf(score, 100),
-            level = when {
-                score >= 75 -> "CRITICAL"
-                score >= 45 -> "CAUTION"
-                else -> "LOW RISK"
-            },
-            reasons = reasons,
-            pattern = pattern,
-            explanation = explanation
+            score = score.coerceAtMost(100),
+            level = level,
+            reasons = reasons
         )
     }
 }
@@ -118,53 +101,58 @@ object ScamEngine {
 data class AnalysisResult(
     val score: Int,
     val level: String,
-    val reasons: List<Pair<String, Float>>,
-    val pattern: String,
-    val explanation: String
+    val reasons: List<Pair<String, Float>>
 )
 
-// =====================
-// 📱 MAIN ACTIVITY
-// =====================
+// ---------------------------
+// Main Activity
+// ---------------------------
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+        val sharedText = intent?.getStringExtra(Intent.EXTRA_TEXT)
 
         setContent {
             KavalAiTheme {
 
-                Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+                var screen by remember {
+                    mutableStateOf(
+                        if (sharedText != null) AppScreen.Analysis
+                        else AppScreen.Chat
+                    )
+                }
 
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(padding),
-                        color = Color(0xFFF8F9FB)
-                    ) {
+                var selectedMessage by remember {
+                    mutableStateOf(sharedText ?: "")
+                }
 
-                        if (sharedText != null) {
+                AnimatedContent(
+                    targetState = screen,
+                    transitionSpec = {
+                        fadeIn(tween(300)) togetherWith fadeOut(tween(300))
+                    },
+                    label = ""
+                ) { target ->
 
-                            val result = remember(sharedText) {
-                                ScamEngine.analyzeMessage(sharedText)
+                    when (target) {
+
+                        AppScreen.Chat -> {
+                            ChatScreen()
+                        }
+
+                        AppScreen.Analysis -> {
+                            val result = remember(selectedMessage) {
+                                ScamEngine.analyze(selectedMessage)
                             }
 
-                            MessageScreen(result, sharedText)
-
-                        } else {
-
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "Waiting for a message to analyze...",
-                                    color = Color.Gray
-                                )
-                            }
+                            AnalysisScreen(
+                                result = result,
+                                originalMessage = selectedMessage,
+                                onBack = { screen = AppScreen.Chat }
+                            )
                         }
                     }
                 }
@@ -173,12 +161,178 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// =====================
-// 🎨 UI
-// =====================
+// ---------------------------
+// WhatsApp‑Style Chat Screen
+// ---------------------------
 
 @Composable
-fun MessageScreen(result: AnalysisResult, originalMessage: String) {
+fun ChatScreen() {
+
+    val messages = listOf(
+        "Hey, are we still meeting tomorrow at 5?",
+        "Your package delivery failed. Reschedule here: bit.ly/update-delivery-info",
+        "URGENT: Your bank account has been suspended. Verify now at http://secure-update-bank.com"
+    )
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFFECE5DD))
+    ) {
+
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFF075E54))
+                .padding(18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color.Gray, CircleShape)
+            )
+
+            Spacer(Modifier.width(10.dp))
+
+            Column {
+                Text("+91 998283 XXXXXX", color = Color.White, fontWeight = FontWeight.Bold)
+                Text("online", color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp)
+            }
+        }
+
+        // Chat Area
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(messages) { msg ->
+                ReceivedBubble(msg)
+            }
+        }
+
+        // Bottom Input Bar
+        WhatsAppInputBar()
+    }
+}
+@Composable
+fun WhatsAppInputBar() {
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0xFFF0F0F0))
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+        // Text Field Container
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .background(Color.White, RoundedCornerShape(24.dp))
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+
+            Text("😊", fontSize = 18.sp)
+
+            Spacer(Modifier.width(8.dp))
+
+            Text(
+                "Message",
+                color = Color.Gray,
+                fontSize = 14.sp
+            )
+
+            Spacer(Modifier.weight(1f))
+
+            Text("📎", fontSize = 16.sp)
+        }
+
+        Spacer(Modifier.width(8.dp))
+
+        // Mic Button
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .background(Color(0xFF25D366), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("", fontSize = 18.sp)
+        }
+    }
+}
+// ---------------------------
+// Message Bubble (Share Sheet)
+// ---------------------------
+
+@Composable
+fun ReceivedBubble(message: String) {
+
+    val context = LocalContext.current
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Start
+    ) {
+        Card(
+            shape = RoundedCornerShape(
+                topStart = 4.dp,
+                topEnd = 16.dp,
+                bottomStart = 16.dp,
+                bottomEnd = 16.dp
+            ),
+            colors = CardDefaults.cardColors(containerColor = Color.White),
+            modifier = Modifier
+                .widthIn(max = 300.dp)
+                .clickable {
+
+                    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                        putExtra(Intent.EXTRA_TEXT, message)
+                        type = "text/plain"
+                    }
+
+                    val chooser = Intent.createChooser(
+                        sendIntent,
+                        "Share message"
+                    )
+
+                    context.startActivity(chooser)
+                }
+        ) {
+            Column(Modifier.padding(12.dp)) {
+
+                Text(message)
+
+                Spacer(Modifier.height(6.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Text("5:42 PM", fontSize = 10.sp, color = Color.Gray)
+                }
+            }
+        }
+    }
+}
+
+// ---------------------------
+// Analysis Screen
+// ---------------------------
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AnalysisScreen(
+    result: AnalysisResult,
+    originalMessage: String,
+    onBack: () -> Unit
+) {
 
     val riskColor = when (result.level) {
         "CRITICAL" -> Color(0xFFE53935)
@@ -186,158 +340,96 @@ fun MessageScreen(result: AnalysisResult, originalMessage: String) {
         else -> Color(0xFF43A047)
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(24.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
+    Column(Modifier.fillMaxSize()) {
 
-        item {
-            Text(
-                "KavalAI Insight",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.ExtraBold
-            )
-        }
+        TopAppBar(
+            title = { Text("KavalAI Insight") },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.Default.ArrowBack, contentDescription = null)
+                }
+            }
+        )
 
-        item {
-            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(24.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
 
+            item {
+                Surface(
+                    shape = RoundedCornerShape(50),
+                    color = Color(0xFF232F3E)
+                ) {
+                    Text(
+                        "AI Powered by Amazon Bedrock",
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        fontSize = 12.sp
+                    )
+                }
+            }
+
+            item {
                 Box(
-                    modifier = Modifier
-                        .size(180.dp)
-                        .background(riskColor.copy(alpha = 0.1f), CircleShape),
+                    Modifier.fillMaxWidth(),
                     contentAlignment = Alignment.Center
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .size(180.dp)
+                            .background(riskColor.copy(alpha = 0.1f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(result.level, color = riskColor)
 
-                        Text(
-                            result.level,
-                            color = riskColor,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
+                            val animatedScore by animateFloatAsState(
+                                targetValue = result.score.toFloat(),
+                                animationSpec = tween(1000),
+                                label = ""
+                            )
 
-                        val animatedScore by animateFloatAsState(
-                            targetValue = result.score.toFloat(),
-                            animationSpec = tween(1000),
-                            label = ""
-                        )
-
-                        Text(
-                            "${animatedScore.toInt()}%",
-                            color = riskColor,
-                            fontSize = 48.sp,
-                            fontWeight = FontWeight.Black
-                        )
+                            Text(
+                                "${animatedScore.toInt()}%",
+                                color = riskColor,
+                                fontSize = 48.sp,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
                     }
                 }
             }
-        }
 
-        item {
-            InfoCard(
-                title = "Detected Strategy",
-                content = result.pattern,
-                color = riskColor
-            )
-        }
-        item {
-            InfoCard(
-                title = "Why this matters",
-                content = result.explanation,
-                color = riskColor
-            )
-        }
+            item {
+                Text("Risk Breakdown", fontWeight = FontWeight.Bold)
 
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(4.dp)
-            ) {
-                Column(Modifier.padding(20.dp)) {
-
-                    Text(
-                        "Why is this risky?",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp
+                result.reasons.forEach { (reason, weight) ->
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = weight,
+                        modifier = Modifier.fillMaxWidth(),
+                        color = riskColor,
+                        trackColor = Color(0xFFEEEEEE),
+                        strokeCap = StrokeCap.Round
                     )
-
-                    Spacer(Modifier.height(16.dp))
-
-                    result.reasons.forEach { (reason, weight) ->
-                        ReasonItem(reason, weight, riskColor)
-                    }
+                    Text(reason, fontSize = 13.sp)
                 }
             }
-        }
 
-
-        item {
-            Text(
-                "Input Text",
-                fontWeight = FontWeight.Bold,
-                color = Color.Gray,
-                fontSize = 12.sp
-            )
-        }
-
-        item {
-            Card(
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White)
-            ) {
-                Text(
-                    originalMessage,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.DarkGray,
-                    modifier = Modifier.padding(12.dp)
-                )
+            item {
+                Text("Original Message", fontWeight = FontWeight.Bold)
+                Card {
+                    Text(
+                        originalMessage,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
             }
-        }
 
-        item {
-            Spacer(Modifier.height(40.dp))
-        }
-    }
-}
-
-@Composable
-fun ReasonItem(label: String, progress: Float, color: Color) {
-
-    Column(Modifier.padding(bottom = 12.dp)) {
-
-        Text(label, fontSize = 14.sp)
-
-        Spacer(Modifier.height(4.dp))
-
-        LinearProgressIndicator(
-            progress = progress,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(6.dp),
-            color = color,
-            trackColor = Color(0xFFEEEEEE),
-            strokeCap = StrokeCap.Round
-        )
-    }
-}
-
-@Composable
-fun InfoCard(title: String, content: String, color: Color) {
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.05f)),
-        border = BorderStroke(1.dp, color.copy(alpha = 0.2f))
-    ) {
-        Column(Modifier.padding(20.dp)) {
-            Text(title, fontWeight = FontWeight.Bold, color = color, fontSize = 12.sp)
-            Text(content, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+            item { Spacer(Modifier.height(40.dp)) }
         }
     }
 }
