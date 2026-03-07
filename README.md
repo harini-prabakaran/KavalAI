@@ -1,3 +1,13 @@
+<p align="center">
+
+<img src="https://img.shields.io/badge/Platform-Android-green"/>
+<img src="https://img.shields.io/badge/Language-Kotlin-purple"/>
+<img src="https://img.shields.io/badge/Status-Prototype-orange"/>
+<img src="https://img.shields.io/badge/AI-Scam%20Detection-blue"/>
+<img src="https://img.shields.io/badge/Hackathon-AWS%20AI%20for%20Bharat-red"/>
+
+</p>
+
 # KavalAI  
 ### AI‑Powered Scam Detection for Messaging Platforms
 
