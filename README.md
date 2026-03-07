@@ -54,7 +54,21 @@ The system identifies the type of scam attempt such as phishing or financial fra
 Users receive clear recommendations on how to safely respond to suspicious messages.
 
 ---
+# Screenshots
 
+<p align="center">
+  <img src="screenshots/chat_screen.png" width="250"/>
+  <img src="screenshots/share_screen.png" width="250"/>
+  <img src="screenshots/analysis_screen.png" width="250"/>
+</p>
+
+<p align="center">
+  <b>Chat Interface</b> &nbsp;&nbsp;&nbsp;&nbsp;
+  <b>Share Message</b> &nbsp;&nbsp;&nbsp;&nbsp;
+  <b>AI Risk Analysis</b>
+</p>
+
+---
 # How It Works
 
 1. User receives a suspicious message.
